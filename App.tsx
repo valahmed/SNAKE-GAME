@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Coordinate, Direction, GameStatus, AICommentary } from './types';
-import { KEYS, BOARD_WIDTH, BOARD_HEIGHT, INITIAL_SPEED, MIN_SPEED, SPEED_DECREMENT } from './constants';
+import { KEYS, BOARD_WIDTH, BOARD_HEIGHT, GRID_SIZE, INITIAL_SPEED, MIN_SPEED, SPEED_DECREMENT } from './constants';
 import { getFastCommentary } from './services/geminiService';
 import { playSound } from './services/audioService';
 import SnakeBoard from './components/SnakeBoard';
@@ -17,6 +17,9 @@ const App: React.FC = () => {
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [initialSpeed, setInitialSpeed] = useState(INITIAL_SPEED);
+  
+  // UI State
+  const [boardScale, setBoardScale] = useState(1);
   
   // AI State
   const [commentary, setCommentary] = useState<AICommentary | null>(null);
@@ -42,6 +45,33 @@ const App: React.FC = () => {
       if (!isOnSnake) return newFood;
     }
     return { x: 0, y: 0 }; // Should not reach here
+  }, []);
+
+  // Handle Screen Resize for Responsive Board
+  useEffect(() => {
+    const handleResize = () => {
+      const gameBoardSize = BOARD_WIDTH * GRID_SIZE; // 500px
+      const paddingX = 32; // Safety margin
+      const paddingY = 300; // Space for header and controls
+      
+      const availableWidth = window.innerWidth - paddingX;
+      const availableHeight = window.innerHeight - paddingY;
+
+      const scaleX = availableWidth / gameBoardSize;
+      const scaleY = availableHeight / gameBoardSize;
+
+      // Scale down if needed, but cap at 1 (don't upscale on huge screens)
+      // Use the smaller scale to ensure it fits both dimensions
+      const newScale = Math.min(1, scaleX, scaleY); 
+      
+      // Ensure it doesn't get absurdly small
+      setBoardScale(Math.max(0.5, newScale));
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Initial calc
+
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Input Handler
@@ -207,8 +237,10 @@ const App: React.FC = () => {
     setScore(0);
   };
 
+  const gameSizePx = BOARD_WIDTH * GRID_SIZE;
+
   return (
-    <div className="min-h-screen bg-[#050505] text-gray-100 font-sans selection:bg-neon-green selection:text-black flex flex-col items-center justify-center relative overflow-hidden pb-8">
+    <div className="min-h-screen bg-[#050505] text-gray-100 font-sans selection:bg-neon-green selection:text-black flex flex-col items-center justify-start md:justify-center relative overflow-hidden pt-4 pb-8 touch-none">
       
       {/* Ambient Background Glow */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
@@ -217,69 +249,84 @@ const App: React.FC = () => {
       </div>
 
       {/* Header / Scoreboard */}
-      <div className="w-full max-w-2xl flex justify-between items-end mb-4 z-10 px-4 pt-4">
+      <div className="w-full max-w-2xl flex justify-between items-end mb-2 z-10 px-4 md:mb-4">
         <div>
-          <h1 className="text-3xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-neon-green to-neon-blue drop-shadow-[0_2px_10px_rgba(57,255,20,0.3)]">
+          <h1 className="text-2xl md:text-3xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-neon-green to-neon-blue drop-shadow-[0_2px_10px_rgba(57,255,20,0.3)]">
             GAME DEVELOP BY AHMED
           </h1>
-          <div className="flex gap-4 text-sm font-mono mt-2">
+          <div className="flex gap-4 text-xs md:text-sm font-mono mt-1 md:mt-2">
             <span className="text-gray-400">HIGH SCORE: <span className="text-neon-pink">{highScore}</span></span>
             <span className="text-gray-400">SPEED: <span className="text-neon-blue">{Math.round(1000 / speedRef.current)} TPS</span></span>
           </div>
         </div>
         <div className="text-right">
-          <div className="text-6xl font-black text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)] leading-none">
+          <div className="text-4xl md:text-6xl font-black text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)] leading-none">
             {score.toString().padStart(3, '0')}
           </div>
-          <div className="text-xs text-neon-green uppercase tracking-[0.2em] mt-1">Current Score</div>
+          <div className="text-[10px] md:text-xs text-neon-green uppercase tracking-[0.2em] mt-1">Current Score</div>
         </div>
       </div>
 
       {/* AI Commentary Bubble */}
-      <div className="h-12 w-full max-w-lg mb-2 z-20 flex items-center justify-center">
+      <div className="h-10 md:h-12 w-full max-w-lg mb-2 z-20 flex items-center justify-center px-4">
         {commentary && (
           <div className={`
-            flex items-center gap-3 px-6 py-2 rounded-full border backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-300
+            flex items-center gap-2 md:gap-3 px-4 py-1.5 md:px-6 md:py-2 rounded-full border backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-300 shadow-lg
             ${commentary.mood === 'excited' ? 'border-neon-green bg-neon-green/10 text-neon-green' : 
               commentary.mood === 'sarcastic' ? 'border-neon-pink bg-neon-pink/10 text-neon-pink' : 
               'border-neon-blue bg-neon-blue/10 text-neon-blue'}
           `}>
-            {modelLoading ? <Cpu className="w-4 h-4 animate-pulse" /> : <MessageSquare className="w-4 h-4" />}
-            <span className="font-mono font-bold text-sm">
+            {modelLoading ? <Cpu className="w-3 h-3 md:w-4 md:h-4 animate-pulse" /> : <MessageSquare className="w-3 h-3 md:w-4 md:h-4" />}
+            <span className="font-mono font-bold text-xs md:text-sm truncate max-w-[80vw]">
               "{commentary.text}"
             </span>
           </div>
         )}
       </div>
 
-      {/* Game Board Container */}
-      <div className="relative z-10 mb-6">
-        <SnakeBoard snake={snake} food={food} />
-        <GameOverlay 
-          status={status} 
-          score={score}
-          initialSpeed={initialSpeed}
-          setInitialSpeed={setInitialSpeed}
-          onStart={handleStartGame} 
-          onRestart={handleStartGame}
-          onExit={handleExit}
-        />
+      {/* Game Board Container with Scaling */}
+      <div 
+        className="relative z-10 mb-4 flex justify-center items-center transition-transform duration-300 ease-out"
+        style={{
+          width: gameSizePx * boardScale,
+          height: gameSizePx * boardScale
+        }}
+      >
+        {/* The internal div keeps fixed logic size, but is scaled via CSS transform */}
+        <div style={{
+          width: gameSizePx,
+          height: gameSizePx,
+          transform: `scale(${boardScale})`,
+          transformOrigin: 'center',
+          position: 'absolute'
+        }}>
+          <SnakeBoard snake={snake} food={food} />
+          <GameOverlay 
+            status={status} 
+            score={score}
+            initialSpeed={initialSpeed}
+            setInitialSpeed={setInitialSpeed}
+            onStart={handleStartGame} 
+            onRestart={handleStartGame}
+            onExit={handleExit}
+          />
+        </div>
       </div>
 
       {/* On-Screen Controls (D-Pad) */}
-      <div className="z-20 flex flex-col items-center gap-2">
+      <div className="z-20 flex flex-col items-center gap-1 md:gap-2 mt-auto md:mt-0">
          {/* Up Button */}
          <button 
-           className="w-14 h-14 bg-gray-800/80 border border-neon-blue/50 rounded-lg flex items-center justify-center active:bg-neon-blue active:text-black transition-colors touch-manipulation"
+           className="w-14 h-14 md:w-16 md:h-16 bg-gray-800/80 border border-neon-blue/50 rounded-2xl flex items-center justify-center active:bg-neon-blue active:text-black active:scale-95 transition-all shadow-lg touch-manipulation backdrop-blur-sm"
            onPointerDown={(e) => { e.preventDefault(); changeDirection(Direction.UP); }}
          >
            <ChevronUp size={32} />
          </button>
          
-         <div className="flex gap-2">
+         <div className="flex gap-2 md:gap-4">
            {/* Left Button */}
            <button 
-             className="w-14 h-14 bg-gray-800/80 border border-neon-blue/50 rounded-lg flex items-center justify-center active:bg-neon-blue active:text-black transition-colors touch-manipulation"
+             className="w-14 h-14 md:w-16 md:h-16 bg-gray-800/80 border border-neon-blue/50 rounded-2xl flex items-center justify-center active:bg-neon-blue active:text-black active:scale-95 transition-all shadow-lg touch-manipulation backdrop-blur-sm"
              onPointerDown={(e) => { e.preventDefault(); changeDirection(Direction.LEFT); }}
            >
              <ChevronLeft size={32} />
@@ -287,7 +334,7 @@ const App: React.FC = () => {
            
            {/* Down Button */}
            <button 
-             className="w-14 h-14 bg-gray-800/80 border border-neon-blue/50 rounded-lg flex items-center justify-center active:bg-neon-blue active:text-black transition-colors touch-manipulation"
+             className="w-14 h-14 md:w-16 md:h-16 bg-gray-800/80 border border-neon-blue/50 rounded-2xl flex items-center justify-center active:bg-neon-blue active:text-black active:scale-95 transition-all shadow-lg touch-manipulation backdrop-blur-sm"
              onPointerDown={(e) => { e.preventDefault(); changeDirection(Direction.DOWN); }}
            >
              <ChevronDown size={32} />
@@ -295,7 +342,7 @@ const App: React.FC = () => {
            
            {/* Right Button */}
            <button 
-             className="w-14 h-14 bg-gray-800/80 border border-neon-blue/50 rounded-lg flex items-center justify-center active:bg-neon-blue active:text-black transition-colors touch-manipulation"
+             className="w-14 h-14 md:w-16 md:h-16 bg-gray-800/80 border border-neon-blue/50 rounded-2xl flex items-center justify-center active:bg-neon-blue active:text-black active:scale-95 transition-all shadow-lg touch-manipulation backdrop-blur-sm"
              onPointerDown={(e) => { e.preventDefault(); changeDirection(Direction.RIGHT); }}
            >
              <ChevronRight size={32} />
@@ -303,7 +350,7 @@ const App: React.FC = () => {
          </div>
       </div>
 
-      {/* Controls Hint Text (Hidden on small screens if controls are visible, but useful for desktop) */}
+      {/* Controls Hint Text */}
       <div className="mt-4 text-gray-600 font-mono text-xs hidden md:flex gap-8">
         <span className="flex items-center gap-2"><kbd className="bg-gray-800 px-2 py-1 rounded border border-gray-700">WASD</kbd> TO MOVE</span>
         <span className="flex items-center gap-2"><Zap className="w-3 h-3" /> FAST AI ENABLED</span>
